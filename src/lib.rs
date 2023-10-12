@@ -14,6 +14,11 @@ pub mod models {
                 pub mod rates;
             }
         }
+        pub mod fx_trades {
+            pub mod deal {
+                pub mod deal;
+            }
+        }
     }
 
     pub mod authorization {
@@ -45,6 +50,11 @@ pub mod foreign_exchange {
             pub mod teller_rates;
         }
     }
+    pub mod fx_trades {
+        pub mod deal {
+            pub mod deal;
+        }
+    }
 }
 use base64::{
     alphabet,
@@ -52,18 +62,21 @@ use base64::{
     Engine as _,
 };
 
-use models::foreign_exchange::fx_rates::{
-    currency::currency::{
-        CurrencyCheckValueDateInputDetails, CurrencyCheckValueDateResponseData,
-        CurrencyCutoffTimeInputDetails, CurrencyCutoffTimeResponseData, CurrencyResponseData,
-        UnauthorizedErrorResponseData,
+use models::foreign_exchange::{
+    fx_rates::{
+        currency::currency::{
+            CurrencyCheckValueDateInputDetails, CurrencyCheckValueDateResponseData,
+            CurrencyCutoffTimeInputDetails, CurrencyCutoffTimeResponseData, CurrencyResponseData,
+            UnauthorizedErrorResponseData,
+        },
+        rate::rate::{RateInputDetails, RateLatestInputDetails, RateResponseData},
+        rates::rates::{
+            RatesLatestInputDetails, RatesResponseData, TellerHistoricRateInputDetails,
+            TellerHistoricRateResponseData, TellerRateResponseData,
+        },
+        tenor::tenor::{TenorInputDetails, TenorResponseData},
     },
-    rate::rate::{RateInputDetails, RateLatestInputDetails, RateResponseData},
-    rates::rates::{
-        RatesLatestInputDetails, RatesResponseData, TellerHistoricRateInputDetails,
-        TellerHistoricRateResponseData, TellerRateResponseData,
-    },
-    tenor::tenor::{TenorInputDetails, TenorResponseData},
+    fx_trades::deal::deal::{DealInputDetails, DealResponseData, ErrorResponseData},
 };
 
 const AUTHORISATION_BEARER: &str = "Bearer";
@@ -94,6 +107,11 @@ const RATES_URL_SANDBOX: &str =
 const RATES_URL_PROD: &str =
     "https://gateway.bifrost.cib-absaaccess.prod.caas.absa.co.za/fxratesapi/1.0/rates/";
 
+const DEAL_URL_SANDBOX: &str =
+    "https://gateway.bifrost.cib-absaaccess.uat.caas.absa.co.za/fxtradeapi/1.0/deal/";
+const DEAL_URL_PROD: &str =
+    "https://gateway.bifrost.cib-absaaccess.prod.caas.absa.co.za/fxtradeapi/1.0/deal/";
+
 #[derive(Debug)]
 pub struct AbsaAccessGateway {
     grant_type: String,
@@ -104,6 +122,7 @@ pub struct AbsaAccessGateway {
     rate_url: String,
     tenor_url: String,
     rates_url: String,
+    deal_url: String,
 }
 
 impl AbsaAccessGateway {
@@ -164,6 +183,12 @@ impl AbsaAccessGateway {
             RATES_URL_SANDBOX.to_string()
         };
 
+        let deal_url = if _env.eq_ignore_ascii_case(&String::from("prod")) {
+            DEAL_URL_PROD.to_string()
+        } else {
+            DEAL_URL_SANDBOX.to_string()
+        };
+
         Ok(Self {
             grant_type,
             consumer_key,
@@ -173,6 +198,7 @@ impl AbsaAccessGateway {
             rate_url,
             tenor_url,
             rates_url,
+            deal_url,
         })
     }
 
@@ -586,6 +612,36 @@ impl AbsaAccessGateway {
                 api_url.push_str(&to_date);
 
                 let _result = foreign_exchange::fx_rates::rates::teller_historic_rates::enquire(
+                    access_token,
+                    api_url.to_string(),
+                )
+                .await;
+
+                return _result;
+            }
+            Err(_err) => {
+                // Handle error case
+                return Err(_err.to_string());
+            }
+        }
+    }
+
+    pub async fn book_deal(
+        &self,
+        deal_details: DealInputDetails,
+    ) -> std::result::Result<(Option<DealResponseData>, Option<ErrorResponseData>), String> {
+        let _output = self.get_auth_token();
+
+        let _result = _output.await;
+
+        match _result {
+            Ok(access_token_result) => {
+                // Handle success case
+                let access_token: String = self.parse_auth_token(access_token_result);
+                let api_url = &self.deal_url;
+
+                let _result = foreign_exchange::fx_trades::deal::deal::book(
+                    deal_details,
                     access_token,
                     api_url.to_string(),
                 )
